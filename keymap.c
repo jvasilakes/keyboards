@@ -17,10 +17,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include QMK_KEYBOARD_H
+#include <stdlib.h>
+#include <time.h>
 #include "frames.h"
+
+uint16_t roll(uint16_t N);
 
 static int num_keypresses = 0;
 static int current_frame = 0;
+uint8_t die_idx = 0;
+uint16_t roll_result = 1;
+
 
 // Layers
 enum {
@@ -30,11 +37,17 @@ enum {
 	_GREEK,
 	_MATH,
 	_GAME,
-	_WPN
+	_WPN,
+	_DICE
+};
+
+enum custom_keycodes {
+	NEXT_DIE = SAFE_RANGE,
+	ROLL,
 };
 
 enum combos {
-	FLWR_RESET,  // KC_SPC + KC_ENT
+    FLWR_RESET,  // KC_SPC + KC_ENT
     FLWR_GROW,   // KC_SPC + KC_K
 };
 
@@ -129,6 +142,10 @@ combo_t key_combos[COMBO_COUNT] = {
 	[FLWR_GROW] = COMBO_ACTION(flwr_grow),
 };
 
+
+const uint16_t dice[7] = {2, 4, 6, 8, 10, 12, 20};
+
+
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   /*
   // BASE, workman layout
@@ -197,7 +214,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   ),
 
   // MATH
-  [4] = LAYOUT_split_3x6_3(
+  [_MATH] = LAYOUT_split_3x6_3(
   //,----------------------------------------------------------------------------------------------------------.                    ,---------------------------------------------------------------------------------------------------.
      KC_NO,    X(RAT),            KC_NO,            XP(IN,NIN),           X(REAL),             KC_NO,                                 KC_NO,      KC_NO,                   KC_NO,          X(NUL),                   KC_NO,      KC_NO,
   //|--------+------------+------------------+----------------------+------------------+-----------------------|                    |-----------+-----------------------+-----------+-------------------------+----------------+--------|
@@ -213,33 +230,46 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
   //,-----------------------------------------------------.                    ,-----------------------------------------------------.
       KC_ESC,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,                         KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_BSPC,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-      KC_LSFT, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,                         KC_F6,   KC_F7,   KC_F8,   KC_F9,  KC_F10,  KC_F11,
+      KC_TAB, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,                         KC_F6,   KC_F7,   KC_F8,   KC_F9,  KC_F10,  KC_F11,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-      KC_LCTL, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,                         KC_NO,  KC_PGDN, KC_PGUP,  KC_NO,   KC_NO,  KC_TRNS,
+      KC_LCTL, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,                         KC_NO,  KC_PGDN, KC_PGUP,  KC_NO,   KC_NO, KC_TRNS,
   //|--------+--------+--------+--------+--------+--------+--------|  |--------+--------+--------+--------+--------+--------+--------|
-                                          KC_TAB, MO(_WPN), KC_SPC,     KC_ENT, KC_TRNS, KC_NO
+                                          KC_LSFT, MO(_WPN), KC_SPC,     KC_ENT, KC_TRNS, TG(_DICE)
                                       //`--------------------------'  `--------------------------'
   ),
 
   // WPN
   [_WPN] = LAYOUT_split_3x6_3(
   //,-----------------------------------------------------.                    ,-----------------------------------------------------.
-      KC_ESC,  KC_1,     KC_2,    KC_3,   KC_4,    KC_5,                          KC_6,   KC_7,    KC_8,   KC_9,     KC_0,    KC_NO,
+      KC_ESC,  KC_1,     KC_2,    KC_3,   KC_4,    KC_5,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
-      KC_TRNS, KC_LSFT,  KC_A,    KC_S,   KC_D,    KC_F,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
+      KC_TRNS, KC_6,     KC_7,    KC_8,   KC_9,    KC_0,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
   //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
       KC_TRNS, KC_LCTL,  KC_Z,    KC_X,   KC_C,    KC_V,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
   //|--------+--------+--------+--------+--------+--------+--------|  |--------+--------+--------+--------+--------+--------+--------|
                                           KC_TRNS, KC_TRNS, KC_SPC,    KC_ENT, KC_NO, KC_NO
                                       //`--------------------------'  `--------------------------'
-  )
+  ),
 
+  [_DICE] = LAYOUT_split_3x6_3(
+  //,-----------------------------------------------------.                    ,-----------------------------------------------------.
+      KC_ESC,  KC_1,     KC_2,    KC_3,   KC_4,    KC_5,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
+  //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
+      KC_TRNS, KC_6,     KC_7,    KC_8,   KC_9,    KC_0,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
+  //|--------+--------+--------+--------+--------+--------|                    |--------+--------+--------+--------+--------+--------|
+      KC_TRNS, KC_LCTL,  KC_Z,    KC_X,   KC_C,    KC_V,                         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
+  //|--------+--------+--------+--------+--------+--------+--------|  |--------+--------+--------+--------+--------+--------+--------|
+                                          KC_TRNS, KC_TRNS, NEXT_DIE,    ROLL, KC_TRNS, KC_TRNS
+                                      //`--------------------------'  `--------------------------'
+  )
 };
+
 
 
 // Shift + Backspace for Delete
 // Initialize variable holding the binary representation of active modifiers.
 uint8_t mod_state;
+char roll_str[5] = {};
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (record->event.pressed) {
 		num_keypresses = num_keypresses + 1;
@@ -283,13 +313,58 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         // Let QMK process the KC_BSPC keycode as usual outside of shift
         return true;
 	}
+	case TG(_DICE):
+		{
+		if (record->event.pressed) { 
+		} else {
+			oled_clear();
+		}
+		}
+    case NEXT_DIE:
+	{
+	if (record->event.pressed) {
+		if (die_idx < (DICE_FRAMES - 1)) {
+			die_idx = die_idx + 1;
+		} else {
+			die_idx = 0;
+		}
+	}
+	break;
+	}
+    case ROLL:
+		{
+		if (record->event.pressed) {
+			roll_result = roll(dice[die_idx]);
+			snprintf(roll_str, sizeof(roll_str), "%d ", roll_result);
+		}
+		}
     }
     return true;
 };
 
+uint16_t roll(uint16_t n) {
+  if ((n - 1) >= RAND_MAX) {
+    return rand();
+  } else {
+    // Chop off all of the values that would cause skew...
+    int end = RAND_MAX / n; // truncate skew
+    //assert (end > 0);
+    end *= n;
+
+    // ... and ignore results from rand() that fall above that limit.
+    // (Worst case the loop condition should succeed 50% of the time,
+    // so we can expect to bail out of this loop pretty quickly.)
+    int r;
+    while ((r = rand()) >= end);
+
+    return (r % n) + 1;
+  }
+}
+
 
 #ifdef OLED_DRIVER_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) {
+  srand(time(0));  // seed random for ROLL
   return OLED_ROTATION_270;
 }
 
@@ -312,7 +387,7 @@ void process_combo_event(uint16_t combo_index, bool pressed) {
 	}
 }
 
-
+char die_str[4] = {};
 void oled_render_layer_state(void) {
     //  oled_write_P(PSTR("Layer: "), false);
 	oled_set_cursor(0, 6);
@@ -333,12 +408,21 @@ void oled_render_layer_state(void) {
             oled_write_raw_P(math_logo, LOGO_SIZE);
             break;
         case _GAME:
-			oled_scroll_off();
+	        oled_scroll_off();
             oled_write_raw_P(game_logo, LOGO_SIZE);
             break;
         case _WPN:
             oled_write_raw_P(game_logo, LOGO_SIZE);
-			oled_scroll_right();
+	        oled_scroll_right();
+			break;
+        case _DICE:
+			oled_set_cursor(2, 4);
+			oled_write(roll_str, false);
+			oled_set_cursor(0, 6);
+            oled_write_raw_P(dice_frames[die_idx], LOGO_SIZE);
+			snprintf(die_str, sizeof(die_str), "d%d ", dice[die_idx]);
+			oled_set_cursor(2, 11);
+			oled_write(die_str, false);
             break;
     }
 }
